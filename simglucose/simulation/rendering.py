@@ -7,11 +7,13 @@ logger = logging.getLogger(__name__)
 
 
 class Viewer(object):
-    def __init__(self, start_time, patient_name, figsize=None):
+    def __init__(self, start_time, patient_name, figsize=None, window=None):
         self.start_time = start_time
         self.patient_name = patient_name
+        self.window = window
         self.fig, self.axes, self.lines = self.initialize()
         self.update()
+
 
     def initialize(self):
         plt.ion()
@@ -79,7 +81,6 @@ class Viewer(object):
         adjust_ylim(self.axes[0], min(min(data['BG']), min(data['CGM'])),
                     max(max(data['BG']), max(data['CGM'])))
         adjust_xlim(self.axes[0], data.index[-1])
-
         self.lines[2].set_xdata(data.index.values)
         self.lines[2].set_ydata(data['CHO'].values)
 
@@ -145,18 +146,18 @@ def adjust_ylim(ax, ymin, ymax):
 def adjust_xlim(ax, timemax, xlabel=False):
     xlim = mdates.num2date(ax.get_xlim())
     update = False
-
     # remove timezone awareness to make them comparable
     timemax = timemax.replace(tzinfo=None)
     xlim[0] = xlim[0].replace(tzinfo=None)
     xlim[1] = xlim[1].replace(tzinfo=None)
+
 
     if timemax > xlim[1] - timedelta(minutes=30):
         xmax = xlim[1] + timedelta(hours=6)
         update = True
 
     if update:
-        ax.set_xlim([xlim[0], xmax])
+        ax.set_xlim([xlim[0], timemax])
         for spine in ax.spines.values():
             ax.draw_artist(spine)
         ax.draw_artist(ax.xaxis)

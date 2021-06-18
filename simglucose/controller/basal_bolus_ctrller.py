@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import pkg_resources
 import logging
+from random import uniform
 
 logger = logging.getLogger(__name__)
 CONTROL_QUEST = pkg_resources.resource_filename(
@@ -18,17 +19,26 @@ class BBController(Controller):
     Diabetes patient. The performance of this controller can serve as a
     baseline when developing a more advanced controller.
     """
-    def __init__(self, target=140):
-        self.quest = pd.read_csv(CONTROL_QUEST)
-        self.patient_params = pd.read_csv(
-            PATIENT_PARA_FILE)
+    def __init__(self, patient=None, target=140, correction_threshold=150,
+                 unprompted_correction_prob=0.05):
+        self.patient = patient
+
+        if patient is not None:
+            self.quest = patient.params
+            self.patient_params = patient.params
+        else:
+
+            self.quest = pd.read_csv(CONTROL_QUEST)
+            self.patient_params = pd.read_csv(
+                PATIENT_PARA_FILE)
         self.target = target
+        self.correction_thresh = correction_threshold
+        self.unprompted_correction_prob = unprompted_correction_prob
 
     def policy(self, observation, reward, done, **kwargs):
         sample_time = kwargs.get('sample_time', 1)
         pname = kwargs.get('patient_name')
         meal = kwargs.get('meal')
-
         action = self._bb_policy(
             pname,
             meal,
@@ -54,26 +64,43 @@ class BBController(Controller):
         simulator only accepts insulin rate. Hence the bolus is converted to
         insulin rate.
         """
-        if any(self.quest.Name.str.match(name)):
-            quest = self.quest[self.quest.Name.str.match(name)]
-            params = self.patient_params[self.patient_params.Name.str.match(
-                name)]
-            u2ss = params.u2ss.values.item()  # unit: pmol/(L*kg)
-            BW = params.BW.values.item()      # unit: kg
-        else:
-            quest = pd.DataFrame([['Average', 1 / 15, 1 / 50, 50, 30]],
-                             columns=['Name', 'CR', 'CF', 'TDI', 'Age'])
-            u2ss = 1.43   # unit: pmol/(L*kg)
-            BW = 57.0     # unit: kg
+        if self.patient_params is None:
+            if any(self.quest.Name.str.match(name)):
+                quest = self.quest[self.quest.Name.str.match(name)]
+                params = self.patient_params[self.patient_params.Name.str.match(
+                    name)]
+                u2ss = params.u2ss.values.item()  # unit: pmol/(L*kg)
+                BW = params.BW.values.item()      # unit: kg
+            else:
+                quest = pd.DataFrame([['Average', 1 / 15, 1 / 50, 50, 30]],
+                                 columns=['Name', 'CR', 'CF', 'TDI', 'Age'])
+                u2ss = 1.43   # unit: pmol/(L*kg)
+                BW = 57.0     # unit: kg
 
-        basal = u2ss * BW / 6000  # unit: U/min
-        if meal > 0:
-            logger.info('Calculating bolus ...')
-            logger.debug('glucose = {}'.format(glucose))
-            bolus = (meal / quest.CR.values + (glucose > 150)
-                    * (glucose - self.target) / quest.CF.values).item()  # unit: U
+            basal = u2ss * BW / 6000  # unit: U/min
+            if meal > 0:
+                logger.info('Calculating bolus ...')
+                logger.debug('glucose = {}'.format(glucose))
+                bolus = (meal / quest.CR.values + (glucose > self.correction_thresh)
+                        * (glucose - self.target) / quest.CF.values).item()  # unit: U
+            else:
+                bolus = 0 # unit: U
         else:
-            bolus = 0 # unit: U
+            quest = self.patient_params
+            params = self.patient_params
+            u2ss = params.u2ss  # unit: pmol/(L*kg)
+            BW = params.BW
+            basal = u2ss * BW / 6000  # unit: U/min
+            bolus = 0  # unit: U
+            if meal > 0:
+                logger.info('Calculating bolus ...')
+                logger.debug('glucose = {}'.format(glucose))
+                bolus = (meal / quest.CR + (glucose > self.correction_thresh)
+                         * (
+                         glucose - self.target) / quest.CF).item()  # unit: U
+
+            if uniform(0, 1) < self.unprompted_correction_prob and glucose > self.correction_thresh:
+                bolus = ((glucose - self.target) / quest.CF).item()
 
         # This is to convert bolus in total amount (U) to insulin rate (U/min). 
         # The simulation environment does not treat basal and bolus

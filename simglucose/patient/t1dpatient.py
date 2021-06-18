@@ -19,7 +19,8 @@ class T1DPatient(Patient):
     SAMPLE_TIME = 1  # min
     EAT_RATE = 5    # g/min CHO
 
-    def __init__(self, params, init_state=None, random_init_bg=False, seed=None, t0=0):
+    def __init__(self, params, init_state=None, init_bg=None,
+                 random_init_bg=False, seed=None, t0=0):
         '''
         T1DPatient constructor.
         Inputs:
@@ -30,8 +31,10 @@ class T1DPatient(Patient):
             - t0: simulation start time, it is 0 by default
         '''
         self._params = params
-        self._init_state = init_state
+        self.set_init_bg(init_bg)
+
         self.random_init_bg = random_init_bg
+        self._init_state = init_state
         self._seed = seed
         self.t0 = t0
         self.reset()
@@ -73,7 +76,19 @@ class T1DPatient(Patient):
     @property
     def sample_time(self):
         return self.SAMPLE_TIME
-
+    
+    def set_init_bg(self, bg):
+        if bg is not None:
+            self._params.Gb = bg
+            self._params.Gpb = self._params.Gb * self._params.Vg
+            self._params.EGPb = self._params.kp1 - self._params.kp2 * self._params.Gpb - self._params.kp3 * self._params.Ib
+            Gtb = (
+                  self._params.Fsnc - self._params.EGPb + self._params.k1 * self._params.Gpb) / self._params.k2
+            self._params.Vm0 = (self._params.EGPb - self._params.Fsnc) * (self._params.Km0 + Gtb) / Gtb
+            self._params.iloc[5] = self._params.Gpb
+            self._params.iloc[6] = Gtb
+            self._params.iloc[14] = self._params.Gpb
+    
     def step(self, action):
         # Convert announcing meal to the meal amount to eat at the moment
         to_eat = self._announce_meal(action.CHO)
@@ -167,8 +182,7 @@ class T1DPatient(Patient):
         dxdt[4] = (x[4] >= 0) * dxdt[4]
 
         # insulin kinetics
-        dxdt[5] = -(params.m2 + params.m4) * x[5] + params.m1 * x[9] + params.ka1 * \
-            x[10] + params.ka2 * x[11]  # plus insulin IV injection u[3] if needed
+        dxdt[5] = -(params.m2 + params.m4) * x[5] + params.m1 * x[9] + params.ka1 * x[10] + params.ka2 * x[11]  # plus insulin IV injection u[3] if needed
         It = x[5] / params.Vi
         dxdt[5] = (x[5] >= 0) * dxdt[5]
 

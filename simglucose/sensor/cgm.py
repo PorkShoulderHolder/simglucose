@@ -10,11 +10,12 @@ SENSOR_PARA_FILE = pkg_resources.resource_filename(
 
 
 class CGMSensor(object):
-    def __init__(self, params, seed=None):
+    def __init__(self, params, seed=None, noise_level=1):
         self._params = params
         self.name = params.Name
         self.sample_time = params.sample_time
         self.seed = seed
+        self.noise_level = noise_level
         self._last_CGM = 0
 
     @classmethod
@@ -26,7 +27,7 @@ class CGMSensor(object):
     def measure(self, patient):
         if patient.t % self.sample_time == 0:
             BG = patient.observation.Gsub
-            CGM = BG + next(self._noise_generator)
+            CGM = BG + self.noise_level * next(self._noise_generator)
             CGM = max(CGM, self._params["min"])
             CGM = min(CGM, self._params["max"])
             self._last_CGM = CGM
