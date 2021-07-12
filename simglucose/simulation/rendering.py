@@ -14,7 +14,6 @@ class Viewer(object):
         self.fig, self.axes, self.lines = self.initialize()
         self.update()
 
-
     def initialize(self):
         plt.ion()
         fig, axes = plt.subplots(4)
