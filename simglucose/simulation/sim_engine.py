@@ -34,6 +34,7 @@ class SimObj(object):
                 self.env.render()
             action = self.controller.policy(obs, reward, done, **info)
             obs, reward, done, info = self.env.step(action)
+
         toc = time.time()
         logger.info('Simulation took {} seconds.'.format(toc - tic))
 

@@ -72,6 +72,23 @@ class RandomScenario(Scenario):
         self._seed = seed
         self.reset()
 
+class PlaybackScenario(Scenario):
+    def __init__(self, meal_data, seed=None):
+        start_time = meal_data[0]["Time"]
+        Scenario.__init__(self, start_time=start_time)
+        self.seed = seed
+        self.scenario = {m["Time"]: m["CHO"] for m in meal_data}
+
+
+    def get_action(self, t):
+        if self.scenario[t] > 0:
+            logger.info('Time for meal!')
+            amt = self.scenario[t]
+            return Action(meal=amt)
+        else:
+            return Action(meal=0)
+
+
 
 if __name__ == '__main__':
     from datetime import time

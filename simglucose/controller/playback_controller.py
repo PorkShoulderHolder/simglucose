@@ -1,12 +1,21 @@
 from .base import Controller, Action
-
+from dateutil import parser
+from datetime import timedelta
 
 class PlaybackController(Controller):
-    def __init__(self, sim_data):
-        print(sim_data)
-        self.history = history
+    def __init__(self, data):
+        sim_data = data["sim_data"]
+        self.start_time = parser.parse(data["sim_data"][0]["t"])
+        self.iter = 0
+        self.history = []
+        for s in sim_data:
+            self.history.append(s["insulin"])
 
     def policy(self, observation, reward, done, **kwargs):
-        sample_time = kwargs.get('sample_time', 1)
-        basal, bolus = self.history[sample_time]
-        return Action(basal=basal, bolus=bolus)
+        insulin = self.history[self.iter]
+        self.iter += 1
+        # use basal / bolus convention.  The two are collapsed in the eyes
+        # of the simulator anyways so it doesnt matter.
+        default_basal = 0
+        bolus = insulin
+        return Action(basal=default_basal, bolus=bolus)
