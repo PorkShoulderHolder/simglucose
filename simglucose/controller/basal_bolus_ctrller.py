@@ -24,8 +24,8 @@ class BBController(Controller):
         self.patient = patient
 
         if patient is not None:
-            self.quest = patient.params
-            self.patient_params = patient.params
+            self.quest = patient._params
+            self.patient_params = patient._params
         else:
 
             self.quest = pd.read_csv(CONTROL_QUEST)

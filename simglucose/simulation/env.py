@@ -72,7 +72,6 @@ class T1DSimEnv(object):
         BG = 0.0
         CGM = 0.0
 
-        print(action.basal, action.bolus)
         for _ in range(int(self.sample_time)):
             # Compute moving average as the sample measurements
             tmp_CHO, tmp_insulin, tmp_BG, tmp_CGM = self.mini_step(action)

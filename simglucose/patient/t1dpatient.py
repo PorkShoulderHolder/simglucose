@@ -14,7 +14,8 @@ Observation = namedtuple("observation", ['Gsub'])
 PATIENT_PARA_FILE = pkg_resources.resource_filename(
     'simglucose', 'params/vpatient_params.csv')
 
-total_ins = 0
+iiii = 0
+
 
 class T1DPatient(Patient):
     SAMPLE_TIME = 1  # min
@@ -31,18 +32,24 @@ class T1DPatient(Patient):
               params.iloc[2:15]
             - t0: simulation start time, it is 0 by default
         '''
+        if random_init_bg:
+            params.Gb = init_bg
+            params.Gpb = params.Gb * params.Vg
+            params.EGPb = params.kp1 - params.kp2 * params.Gpb - params.kp3 * params.Ib
+            Gtb = (
+                          params.Fsnc - params.EGPb + params.k1 * params.Gpb) / params.k2
+            params.Vm0 = (params.EGPb - params.Fsnc) * (
+                    params.Km0 + Gtb) / Gtb
 
-
-     
         self._params = params
-        self.set_init_bg(init_bg)
-        global total_ins
-        total_ins = 0
         self.random_init_bg = random_init_bg
         self._init_state = init_state
+        self.init_bg = init_bg
         self._seed = seed
         self.t0 = t0
         self.reset()
+
+
 
     @classmethod
     def withID(cls, patient_id, **kwargs):
@@ -82,10 +89,8 @@ class T1DPatient(Patient):
     def sample_time(self):
         return self.SAMPLE_TIME
 
-    def debug_print(self):
-        print(total_ins)
-
     def set_init_bg(self, bg):
+        print("setting init bg to ", bg)
         if bg is not None:
             pd.set_option("display.max_rows", None, "display.max_columns",
                           None)
@@ -96,10 +101,10 @@ class T1DPatient(Patient):
                   self._params.Fsnc - self._params.EGPb + self._params.k1 * self._params.Gpb) / self._params.k2
             self._params.Vm0 = (self._params.EGPb - self._params.Fsnc) * (self._params.Km0 + Gtb) / Gtb
 
+            self._params.iloc[5] = self._params.Gpb
+            self._params.iloc[6] = Gtb
 
-           # self._params.iloc[5] = self._params.Gpb
-           # self._params.iloc[6] = Gtb
-            self._params.iloc[14] = self._params.Gpb
+            self._params.iloc[12] = self._params.Gpb
     
     def step(self, action):
         # Convert announcing meal to the meal amount to eat at the moment
@@ -145,10 +150,6 @@ class T1DPatient(Patient):
         dxdt = np.zeros(13)
         d = action.CHO * 1000  # g -> mg
         insulin = action.insulin * 6000 / params.BW  # U/min -> pmol/kg/min
-        global total_ins
-
-        total_ins += insulin
-
         basal = params.u2ss * params.BW / 6000  # U/min
 
         # Glucose in the stomach
@@ -280,16 +281,16 @@ class T1DPatient(Patient):
         self.random_state = np.random.RandomState(self.seed)
         if self.random_init_bg:
             # Only randomize glucose related states, x4, x5, and x13
-            mean = [1.0 * self.init_state[3], 
-                    1.0 * self.init_state[4], 
-                    1.0 * self.init_state[12]]
-            cov = np.diag([0.1 * self.init_state[3], 
-                           0.1 * self.init_state[4], 
-                           0.1 * self.init_state[12]]) 
-            bg_init = self.random_state.multivariate_normal(mean, cov)
-            self.init_state[3] = 1.0 * bg_init[0]
-            self.init_state[4] = 1.0 * bg_init[1]
-            self.init_state[12] = 1.0 * bg_init[2]
+            self._params.Gb = self.init_bg
+            self._params.Gpb = self._params.Gb * self._params.Vg
+            self._params.EGPb = self._params.kp1 - self._params.kp2 * self._params.Gpb - self._params.kp3 * self._params.Ib
+            Gtb = (
+                          self._params.Fsnc - self._params.EGPb + self._params.k1 * self._params.Gpb) / self._params.k2
+            self._params.Vm0 = (self._params.EGPb - self._params.Fsnc) * (
+                        self._params.Km0 + Gtb) / Gtb
+            self.init_state[4] = Gtb
+            self.init_state[3] = 1.0 * self._params.Vg * self.init_bg
+            self.init_state[12] = 1.0 * self._params.Vg * self.init_bg
 
         self._last_Qsto = self.init_state[0] + self.init_state[1]
         self._last_foodtaken = 0
